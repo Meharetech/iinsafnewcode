@@ -1,0 +1,436 @@
+const reporterAdProof = require("../../../../models/reporterAdProof/reporterAdProof");
+const Wallet = require("../../../../models/Wallet/walletSchema");
+const Adpost = require("../../../../models/advertismentPost/advertisementPost");
+const sendEmail = require("../../../../utils/sendEmail");
+const User = require("../../../../models/userModel/userModel");
+const notifyOnWhatsapp = require("../../../../utils/notifyOnWhatsapp");
+const Templates = require("../../../../utils/whatsappTemplates");
+const mongoose = require("mongoose"); // ✅ Add mongoose for transactions
+
+const getCompletedAds = async (req, res) => {
+  try {
+    const completedAds = await reporterAdProof.find({
+      "proofs.status": "submitted", // ✅ Show submitted proofs awaiting admin approval
+    }).populate({
+      path: "adId",
+      select: "mediaDescription mediaType imageUrl videoUrl adType requiredViews"
+    }).populate({
+      path: "proofs.reporterId",
+      select: "name email mobile iinsafId role state city organization"
+    }).lean();
+
+    if (!completedAds || completedAds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No submitted proofs found",
+        data: []
+      });
+    }
+
+    // Filter and format the proofs
+    const formattedData = [];
+    completedAds.forEach(doc => {
+      doc.proofs.forEach(proof => {
+        if (proof.status === "submitted") {
+          formattedData.push({
+            adProofId: doc._id,
+            adId: doc.adId?._id,
+            adTitle: doc.adId?.mediaDescription || "N/A",
+            adType: doc.adId?.adType,
+            mediaType: doc.adId?.mediaType,
+            mediaUrl: doc.adId?.mediaType === "video" ? doc.adId?.videoUrl : doc.adId?.imageUrl,
+
+            reporterId: proof.reporterId?._id,
+            reporterName: proof.reporterId?.name,
+            reporterEmail: proof.reporterId?.email,
+            reporterMobile: proof.reporterId?.mobile,
+            iinsafId: proof.iinsafId || proof.reporterId?.iinsafId,
+            userRole: proof.reporterId?.role,
+
+            screenshot: proof.screenshot, // Initial proof screenshot
+            completedTaskScreenshot: proof.completedTaskScreenshot, // Final completion screenshot
+            videoLink: proof.videoLink,
+            platform: proof.platform,
+            submittedAt: proof.submittedAt,
+            completionSubmittedAt: proof.completionSubmittedAt,
+            status: proof.status
+          });
+        }
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Submitted final proofs fetched successfully",
+      count: formattedData.length,
+      data: formattedData,
+    });
+  } catch (error) {
+    console.error("Error in getCompletedAds:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching submitted ads",
+    });
+  }
+};
+
+const adminApproveAdsProof = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { adId, reporterId } = req.body;
+
+    // 1. Update the proof status from "submitted" to "completed" (only if admin approves)
+    const updated = await reporterAdProof.findOneAndUpdate(
+      {
+        adId,
+        "proofs.reporterId": reporterId,
+        "proofs.status": "submitted" // ✅ Only process submitted proofs (final proof submitted)
+      },
+      {
+        $set: {
+          "proofs.$[elem].status": "completed",
+          "proofs.$[elem].adminApprovedAt": new Date(),
+        },
+      },
+      {
+        new: true,
+        arrayFilters: [{ "elem.reporterId": reporterId }],
+        session
+      }
+    );
+
+    if (!updated) {
+      await session.abortTransaction();
+      return res
+        .status(404)
+        .json({ message: "Proof not found or not in submitted status for admin approval" });
+    }
+
+    // 2. Count how many proofs are fully completed
+    const completedProofsCount = updated.proofs.filter(
+      (proof) => proof.status === "completed"
+    ).length;
+
+    // 3. Update reporter's status in the ad
+    await Adpost.updateOne(
+      { _id: adId, "acceptRejectReporterList.reporterId": reporterId },
+      {
+        $set: {
+          "acceptRejectReporterList.$.postStatus": "completed",
+          "acceptRejectReporterList.$.completedAt": new Date(),
+        },
+        $unset: {
+          "acceptRejectReporterList.$.rejectedAt": 1,
+          "acceptRejectReporterList.$.rejectNote": 1,
+          "acceptRejectReporterList.$.adminRejectedBy": 1,
+          "acceptRejectReporterList.$.adminRejectedByName": 1,
+        },
+      },
+      { session }
+    );
+
+    // 4. If all required reporters have completed, mark ad as completed
+    let adCompleted = false;
+    if (completedProofsCount >= updated.requiredReporter) {
+      updated.runningAdStatus = "completed";
+      await updated.save({ session });
+
+      // 👉 Also update Adpost document
+      await Adpost.findOneAndUpdate(
+        { _id: adId, status: "running" },
+        { $set: { status: "completed" } },
+        { session }
+      );
+
+      adCompleted = true;
+    }
+
+    // 4. Get the current reporter's proof
+    const proof = updated.proofs.find(
+      (p) => p.reporterId.toString() === reporterId
+    );
+    const paymentAmount = updated.finalReporterPrice;
+
+    if (!paymentAmount || paymentAmount <= 0) {
+      return res
+        .status(400)
+        .json({ message: "Invalid or missing payment amount" });
+    }
+
+    // 5. Get user role to determine wallet userType
+    const userForWallet = await User.findById(reporterId);
+    const userType = userForWallet?.role === "Influencer" ? "Influencer" : "Reporter";
+
+    // 6. Wallet logic
+    let wallet = await Wallet.findOne({
+      userId: reporterId,
+      userType: userType,
+    });
+    if (!wallet) {
+      wallet = new Wallet({
+        userId: reporterId,
+        userType: userType,
+        balance: 0,
+      });
+    }
+
+    wallet.balance += paymentAmount;
+    wallet.transactions.push({
+      type: "credit",
+      amount: paymentAmount,
+      description: `Payment for ad work: ${adId}`,
+    });
+
+    await wallet.save();
+
+    //  1. Notify user (reporter or influencer)
+    console.log("that is my user that upload the proof", userForWallet);
+    if (userForWallet) {
+      const userTypeText = userForWallet.role === "Influencer" ? "influencer" : "reporter";
+      await sendEmail(
+        userForWallet.email,
+        "Proof Approved",
+        `Hi ${userForWallet.name},\n\nYour proof for Ad ID: ${adId} has been approved. 
+        You have received ₹${paymentAmount} in your wallet.\n\nRegards,\nAdmin`
+      );
+
+      // 📱 WhatsApp notification
+      if (userForWallet.mobile) {
+        await notifyOnWhatsapp(
+          userForWallet.mobile,
+          Templates.ADMIN_APPROVE_PROOF_UPLOADED_NOTIFY_TO_REPORTER, // "admin_approve_proof_uploaded_notify_to_reporter"
+          [
+            userForWallet.name, // {{1}} -> user name
+            adId, // {{2}} -> ad ID
+            String(paymentAmount),     // {{3}} -> credited amount (must be string ✅)
+          ]
+        );
+      }
+    }
+
+    //  2. Notify advertiser if ad is completed
+    if (adCompleted) {
+      const ad = await Adpost.findById(adId).populate("owner");
+      if (ad && ad.owner) {
+        await sendEmail(
+          ad.owner.email,
+          "Ad Completed",
+          `Hi ${ad.owner.name},\n\nYour advertisement (Ad ID: ${adId}) has been successfully completed.\n\nRegards,\nAdmin`
+        );
+
+        // 📱 WhatsApp notification
+        if (ad.owner.mobile) {
+          await notifyOnWhatsapp(
+            ad.owner.mobile,
+            Templates.NOTIFY_TO_ADVERTISER_AFTER_AD_COMPLETED, // "notify_to_advertiser_after_ad_completed"
+            [
+              ad.owner.name, // {{1}} -> advertiser name
+              adId, // {{2}} -> ad ID
+            ]
+          );
+        }
+      }
+    }
+
+    await session.commitTransaction();
+
+    // 6. Respond
+    const userTypeText = userForWallet?.role === "Influencer" ? "influencer" : "reporter";
+    res.json({
+      success: true,
+      message: `Task approved and payment credited to ${userTypeText} wallet`,
+      updatedProof: proof,
+      walletBalance: wallet.balance,
+      runningAdStatus: updated.runningAdStatus,
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error("Admin approval error:", err);
+    res.status(500).json({ error: "Server error" });
+  } finally {
+    session.endSession();
+  }
+};
+
+async function adminRejectAdsProof(req, res) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { adId, reporterId, adminNote } = req.body;
+    const adminId = req.user._id;
+    const adminName = req.user.name || req.user.email || "Admin";
+
+    const updated = await reporterAdProof.findOneAndUpdate(
+      {
+        adId,
+        "proofs.reporterId": reporterId,
+        "proofs.status": "submitted", // ✅ Only reject submitted proofs (final proof submitted)
+      },
+      {
+        $set: {
+          "proofs.$[elem].status": "rejected",
+          "proofs.$[elem].adminRejectNote": adminNote || "",
+          "proofs.$[elem].adminRejectedAt": new Date(),
+          "proofs.$[elem].adminRejectedBy": adminId,
+          "proofs.$[elem].adminRejectedByName": adminName,
+        },
+        $unset: {
+          "proofs.$[elem].completedTaskScreenshot": 1, // ✅ Remove completion screenshot
+          "proofs.$[elem].completionSubmittedAt": 1,   // ✅ Remove completion timestamp
+        },
+      },
+      {
+        new: true,
+        arrayFilters: [{ "elem.reporterId": reporterId }],
+        session
+      }
+    );
+
+    if (!updated) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: "Proof not found or not in submitted status for rejection" });
+    }
+
+    // Update reporter's status in the ad - keep initial proof, only reject completion screenshot
+    await Adpost.updateOne(
+      { _id: adId, "acceptRejectReporterList.reporterId": reporterId },
+      {
+        $set: {
+          "acceptRejectReporterList.$.postStatus": "accepted", // ✅ Set back to "accepted" so ad shows again for resubmission
+          "acceptRejectReporterList.$.adProof": true, // Keep adProof as true (initial proof exists)
+          "acceptRejectReporterList.$.rejectedAt": new Date(),
+          "acceptRejectReporterList.$.rejectNote": adminNote || "Completion screenshot rejected by admin",
+          "acceptRejectReporterList.$.adminRejectedBy": adminId,
+          "acceptRejectReporterList.$.adminRejectedByName": adminName,
+        },
+        $unset: {
+          "acceptRejectReporterList.$.completedAt": 1, // Remove completion timestamp
+        },
+      },
+      { session }
+    );
+
+    await session.commitTransaction();
+
+    // Get user details (for email) - works for both reporters and influencers
+    const user = await User.findById(reporterId);
+    if (user) {
+      const userType = user.role === "influencer" ? "influencer" : "reporter";
+      await sendEmail(
+        user.email,
+        "Your Completion Screenshot Has Been Rejected ❌",
+        `Hello ${user.name
+        },\n\nYour completion screenshot for Ad ID: ${adId} has been rejected by Admin: ${adminName}.\nReason: ${adminNote || "No reason provided"
+        }.\n\nYour initial proof is still valid. Please resubmit the completion screenshot.\n\nRegards,\nTeam`
+      );
+
+      // 📱 WhatsApp notification
+      if (user.mobile) {
+        await notifyOnWhatsapp(
+          user.mobile,
+          Templates.ADMIN_REJECT_PROOF_UPLOADED_NOTIFY_TO_REPORTER, // Template works for both
+          [
+            user.name,
+            adId,
+            adminNote || "No reason provided",
+            adminName,
+          ]
+        );
+      }
+    }
+
+    res.json({ message: "Task rejected with note", updated });
+  } catch (err) {
+    await session.abortTransaction();
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  } finally {
+    session.endSession();
+  }
+}
+
+const getFinalCompletedAds = async (req, res) => {
+  try {
+    // Step 1: Find documents where at least one proof is completed and populate advertisement details
+    const completedAds = await reporterAdProof.find({
+      proofs: {
+        $elemMatch: {
+          status: "completed",
+        },
+      },
+    }).populate({
+      path: 'adId',
+      populate: {
+        path: 'owner',
+        select: 'name email organization mobile iinsafId role'
+      }
+    });
+
+    // Step 2: For each matching ad, filter only the proofs with completed status and merge advertisement details
+    const filteredAds = completedAds.map((ad) => {
+      const matchingProofs = ad.proofs.filter(
+        (proof) => proof.status === "completed"
+      );
+
+      // Merge advertisement details with proof data
+      const advertisementDetails = ad.adId ? {
+        // Advertisement basic info
+        adId: ad.adId._id,
+        mediaDescription: ad.adId.mediaDescription,
+        mediaType: ad.adId.mediaType,
+        adState: ad.adId.adState,
+        adCity: ad.adId.adCity,
+        allStates: ad.adId.allStates,
+        userType: ad.adId.userType,
+        requiredViews: ad.adId.requiredViews,
+        baseView: ad.adId.baseView,
+        requiredReporter: ad.adId.requiredReporter,
+        finalReporterPrice: ad.adId.finalReporterPrice,
+        adminCommission: ad.adId.adminCommission,
+        adCommissionRate: ad.adId.adCommissionRate,
+        totalCost: ad.adId.totalCost,
+        createdAt: ad.adId.createdAt,
+        updatedAt: ad.adId.updatedAt,
+        status: ad.adId.status,
+
+        // Owner/Advertiser details
+        owner: ad.adId.owner,
+
+        // Proof-related data from reporterAdProof
+        proofs: matchingProofs,
+        runningAdStatus: ad.runningAdStatus,
+        adType: ad.adType,
+      } : {
+        // Fallback if adId is not populated
+        adId: ad.adId,
+        proofs: matchingProofs,
+        runningAdStatus: ad.runningAdStatus,
+        adType: ad.adType,
+      };
+
+      return advertisementDetails;
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Completed ads fetched successfully",
+      data: filteredAds,
+    });
+  } catch (error) {
+    console.error("Error in getCompletedAds:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching completed ads",
+    });
+  }
+};
+
+module.exports = {
+  getCompletedAds,
+  adminApproveAdsProof,
+  adminRejectAdsProof,
+  getFinalCompletedAds,
+};
