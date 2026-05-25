@@ -141,6 +141,19 @@ const approveStudioSubmission = async (req, res) => {
       $inc: { 'podcastStats.studios': 1 }
     });
 
+    // 📱 Send WhatsApp notification for Podcast studio/episode approval [19podcast_episode_approved]
+    const creatorUser = await PodcastUser.findById(studio.ownerId);
+    if (creatorUser && creatorUser.phoneNo) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(creatorUser.phoneNo, Templates.PODCAST_EPISODE_APPROVED, []);
+        console.log(`📱 Sent WhatsApp Podcast Episode/Studio Approved notification [19podcast_episode_approved] to ${creatorUser.name} (${creatorUser.phoneNo})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp Podcast Episode/Studio Approved notification:", whatsappErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "Studio submission approved successfully",
@@ -198,6 +211,19 @@ const rejectStudioSubmission = async (req, res) => {
     studio.rejectedBy = req.user.userId; // Admin user ID
 
     await studio.save();
+
+    // 📱 Send WhatsApp notification for Podcast studio/episode rejection [20podcast_episode_rejected]
+    const creatorUser = await PodcastUser.findById(studio.ownerId);
+    if (creatorUser && creatorUser.phoneNo) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(creatorUser.phoneNo, Templates.PODCAST_EPISODE_REJECTED, []);
+        console.log(`📱 Sent WhatsApp Podcast Episode/Studio Rejected notification [20podcast_episode_rejected] to ${creatorUser.name} (${creatorUser.phoneNo})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp Podcast Episode/Studio Rejected notification:", whatsappErr.message);
+      }
+    }
 
     res.status(200).json({
       success: true,

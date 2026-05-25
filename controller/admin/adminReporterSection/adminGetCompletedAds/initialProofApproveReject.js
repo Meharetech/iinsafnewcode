@@ -94,12 +94,8 @@ const adminApproveInitialProof = async (req, res) => {
       if (user.mobile) {
         await notifyOnWhatsapp(
           user.mobile,
-          Templates.ADMIN_APPROVE_INITIAL_PROOF_NOTIFY_TO_REPORTER, // Template works for both reporters and influencers
-          [
-            user.name, // {{1}}
-            adId, // {{2}}
-            adminName, // {{3}}
-          ]
+          Templates.ADS_PROOF_APPROVED,
+          []
         );
       }
     }
@@ -234,13 +230,8 @@ const adminRejectInitialProof = async (req, res) => {
       if (user.mobile) {
         await notifyOnWhatsapp(
           user.mobile,
-          Templates.ADMIN_REJECT_INITIAL_PROOF_NOTIFY_TO_REPORTER, // Template works for both reporters and influencers
-          [
-            user.name, // {{1}}
-            adId, // {{2}}
-            adminNote, // {{3}}
-            adminName, // {{4}}
-          ]
+          Templates.ADS_PROOF_REJECTED,
+          []
         );
       }
     }

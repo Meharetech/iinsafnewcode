@@ -35,6 +35,20 @@ const approveConferenceProof = async (req, res) => {
 
     await reporterConference.save();
 
+    // 📱 Send WhatsApp notification for Free Conference Completed to reporter [36free_conf_completed]
+    const User = require("../../../models/userModel/userModel");
+    const reporterUser = await User.findById(reporterId);
+    if (reporterUser && reporterUser.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+        const Templates = require("../../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(reporterUser.mobile, Templates.FREE_CONF_COMPLETED_REPORTER, []);
+        console.log(`📱 Sent WhatsApp notification [36free_conf_completed] to ${reporterUser.name} (${reporterUser.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp free conference completed notification:", whatsappErr.message);
+      }
+    }
+
     // Check if all targeted reporters have responded (accepted/rejected)
     const FreeConference = require("../../../models/pressConference/freeConference");
     const conference = await FreeConference.findOne({ 
@@ -113,6 +127,20 @@ const approveConferenceProof = async (req, res) => {
             conference.completedAt = new Date();
             await conference.save();
             console.log(`Conference ${reporterConference.conferenceId} marked as completed - all targeted reporters responded and all accepted reporters completed their work`);
+
+            // 📱 Send WhatsApp notification for free press conference completed
+            const PressConferenceUser = require("../../../models/pressConferenceUser/pressConferenceUser");
+            const creatorUser = await PressConferenceUser.findById(conference.submittedBy);
+            if (creatorUser && creatorUser.mobile) {
+              try {
+                const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+                const Templates = require("../../../utils/whatsappTemplates");
+                await notifyOnWhatsapp(creatorUser.mobile, Templates.FREE_PRESS_COMPLETED, []);
+                console.log(`📱 Sent WhatsApp free press completed notification [12free_press_completed] to ${creatorUser.name} (${creatorUser.mobile})`);
+              } catch (whatsappErr) {
+                console.error("❌ Failed to send WhatsApp free press completed notification:", whatsappErr.message);
+              }
+            }
           }
         }
       }

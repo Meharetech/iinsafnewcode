@@ -87,14 +87,30 @@ const proofAccept = async (req, res) => {
 
       // 📱 WhatsApp Notification
       if (reporter.mobile) {
-        await notifyOnWhatsapp(
-          reporter.mobile,
-          Templates.NOTIFY_TO_REPORTER_AFTER_ACCEPTED_FREE_AD_PROOF, // ✅ AiSensy template
-          [
-            reporter.name, // {{1}} -> reporter name
-            ad.description, // {{2}} -> ad description
-          ]
-        );
+        try {
+          await notifyOnWhatsapp(
+            reporter.mobile,
+            Templates.NOTIFY_TO_REPORTER_AFTER_ACCEPTED_FREE_AD_PROOF, // ✅ AiSensy template
+            [
+              reporter.name, // {{1}} -> reporter name
+              ad.description, // {{2}} -> ad description
+            ]
+          );
+        } catch (err) {
+          console.error("Failed to send standard free ad accepted notification:", err.message);
+        }
+
+        // 📱 Send WhatsApp notification for Reward Task Completed [33reward_task_completed]
+        try {
+          await notifyOnWhatsapp(
+            reporter.mobile,
+            Templates.REWARD_TASK_COMPLETED,
+            []
+          );
+          console.log(`📱 Sent WhatsApp notification [33reward_task_completed] to ${reporter.name} (${reporter.mobile})`);
+        } catch (err) {
+          console.error("Failed to send reward task completed notification:", err.message);
+        }
       }
     }
 

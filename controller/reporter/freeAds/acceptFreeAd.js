@@ -115,6 +115,18 @@ const acceptFreeAd = async (req, res) => {
 
     console.log("Free ad accepted successfully");
 
+    // 📱 Send WhatsApp notification to reporter/influencer
+    if (req.user && req.user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+        const Templates = require("../../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(req.user.mobile, Templates.ADS_ACCEPTED, []);
+        console.log(`📱 Sent WhatsApp acceptance notification [26ads_accepted] to ${req.user.name} (${req.user.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp free ad acceptance notification:", whatsappErr.message);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: "Free ad accepted successfully",

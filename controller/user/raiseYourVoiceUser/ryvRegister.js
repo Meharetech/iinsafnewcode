@@ -184,7 +184,9 @@ const registerRyvUser = async (req, res) => {
     };
 
     // Store in temporary memory (not database)
-    const key = `${email.toLowerCase()}|${phoneNo}`;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedPhone = typeof phoneNo === 'string' ? phoneNo.trim() : '';
+    const key = `${normalizedEmail}|${normalizedPhone}`;
     pendingRyvRegistrations.set(key, registrationData);
 
     // ✅ 7. Send OTP safely
@@ -235,7 +237,9 @@ const verifyOtpForRyvUser = async (req, res) => {
 
   try {
     // Find pending registration
-    const key = `${email.toLowerCase()}|${phoneNo}`;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedPhone = typeof phoneNo === 'string' ? phoneNo.trim() : '';
+    const key = `${normalizedEmail}|${normalizedPhone}`;
     const userData = pendingRyvRegistrations.get(key);
 
     if (!userData) {
@@ -285,6 +289,18 @@ const verifyOtpForRyvUser = async (req, res) => {
     });
 
     await newUser.save();
+
+    // 📱 Send WhatsApp notification for RYV registration
+    if (newUser.phoneNo) {
+      try {
+        const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+        const Templates = require("../../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(newUser.phoneNo, Templates.RYV_REGISTERED, []);
+        console.log(`📱 Sent WhatsApp RYV registration notification [1rise_voice_registered] to ${newUser.name} (${newUser.phoneNo})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp RYV registration notification:", whatsappErr.message);
+      }
+    }
 
     // Clean up pending registration
     pendingRyvRegistrations.delete(key);

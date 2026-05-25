@@ -153,6 +153,20 @@ const registerPodcastStudio = async (req, res) => {
 
     await newStudio.save();
 
+    // 📱 Send WhatsApp notification for Podcast studio/episode creation [18podcast_episode_created]
+    const PodcastUser = require("../../models/podcastUser/podcastUserSchema");
+    const creatorUser = await PodcastUser.findById(ownerId);
+    if (creatorUser && creatorUser.phoneNo) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(creatorUser.phoneNo, Templates.PODCAST_EPISODE_CREATED, []);
+        console.log(`📱 Sent WhatsApp Podcast Episode/Studio Created notification [18podcast_episode_created] to ${creatorUser.name} (${creatorUser.phoneNo})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp Podcast Episode/Studio Created notification:", whatsappErr.message);
+      }
+    }
+
     // Clean up temporary files
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {

@@ -67,11 +67,8 @@ const approveRyvAd = async (req, res) => {
     if (updatedAd.phoneNo) {
       await notifyOnWhatsapp(
         updatedAd.phoneNo,
-        Templates.NOTIFY_TO_USER_AFTER_APPROVE_RYV_AD, // 👈 WhatsApp template name
-        [
-          updatedAd.name, // {{1}} -> User name
-          updatedAd.description, // {{2}} -> Post description
-        ]
+        Templates.RYV_APPROVED,
+        []
       );
     }
 
@@ -162,12 +159,8 @@ const rejectRyvAd = async (req, res) => {
     if (updatedAd.phoneNo) {
       await notifyOnWhatsapp(
         updatedAd.phoneNo,
-        Templates.NOTIFY_TO_USER_AFTER_REJECTED_RYV_AD, // 👈 WhatsApp template name
-        [
-          updatedAd.name, // {{1}} -> User name
-          updatedAd.rejectionNote || "No reason provided.", // {{2}} -> Rejection reason
-          updatedAd.description, // {{3}} -> Post description
-        ]
+        Templates.RYV_REJECTED,
+        []
       );
     }
 
@@ -448,11 +441,8 @@ const adminAcceptTheProof = async (req, res) => {
     if (proof?.reporterId?.mobile) {
       await notifyOnWhatsapp(
         proof.reporterId.mobile,
-        Templates.NOTIFY_TO_REPORTER_AFTER_APPROVE_RYV_AD_PROOF,
-        [
-          proof.reporterId.name, // {{1}}
-          adId, // {{2}}
-        ]
+        Templates.RYV_COMPLETED,
+        []
       );
     }
 

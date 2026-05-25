@@ -320,6 +320,19 @@ const walletPaymentSuccess = async (req, res) => {
     wallet.balance += amountInRupees;
     await wallet.save();
 
+    // 📱 Send WhatsApp notification for Wallet Recharged [40wallet_recharged]
+    const user = await User.findById(userId);
+    if (user && user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(user.mobile, Templates.WALLET_RECHARGED, [String(amountInRupees)]);
+        console.log(`📱 Sent WhatsApp notification [40wallet_recharged] to ${user.name} (${user.mobile}) for ₹${amountInRupees}`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp wallet recharged notification:", whatsappErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "Wallet topped up successfully",

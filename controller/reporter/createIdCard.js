@@ -151,8 +151,8 @@ const createIdCard = async (req, res) => {
     if (reporterDetails.mobile) {
       await notifyOnWhatsapp(
         reporterDetails.mobile,
-        Templates.NOTIFY_TO_REPORTER_AFTER_SUCCESSFULLY_APPLY_ID_CARD, // "id_applied_template"
-        [reporterDetails.name] // <-- must match AiSensy template placeholders
+        Templates.NOTIFY_TO_REPORTER_AFTER_SUCCESSFULLY_APPLY_ID_CARD, // "22id_card_applied"
+        [] // No params for this template
       );
     }
 

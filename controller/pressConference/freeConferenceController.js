@@ -82,6 +82,19 @@ const submitFreeConference = async (req, res) => {
 
     await freeConference.save();
 
+    // 📱 Send WhatsApp notification to user who created the free press conference
+    const creatorUser = await PressConferenceUser.findById(userId);
+    if (creatorUser && creatorUser.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(creatorUser.mobile, Templates.FREE_PRESS_CREATED, []);
+        console.log(`📱 Sent WhatsApp free press created notification [7free_press_created] to ${creatorUser.name} (${creatorUser.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp free press created notification:", whatsappErr.message);
+      }
+    }
+
     return res.status(201).json({
       success: true,
       message: "Free conference submitted successfully",
@@ -555,6 +568,36 @@ const adminAction = async (req, res) => {
     }
 
     await conference.save();
+
+    // 📱 Send WhatsApp notification to user when free press conference is approved
+    if (action === "approved") {
+      const creatorUser = await PressConferenceUser.findById(conference.submittedBy);
+      if (creatorUser && creatorUser.mobile) {
+        try {
+          const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+          const Templates = require("../../utils/whatsappTemplates");
+          await notifyOnWhatsapp(creatorUser.mobile, Templates.FREE_PRESS_APPROVED, []);
+          console.log(`📱 Sent WhatsApp free press approved notification [10free_press_approved] to ${creatorUser.name} (${creatorUser.mobile})`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp free press approved notification:", whatsappErr.message);
+        }
+      }
+    }
+
+    // 📱 Send WhatsApp notification to user when free press conference is rejected
+    if (action === "rejected") {
+      const creatorUser = await PressConferenceUser.findById(conference.submittedBy);
+      if (creatorUser && creatorUser.mobile) {
+        try {
+          const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+          const Templates = require("../../utils/whatsappTemplates");
+          await notifyOnWhatsapp(creatorUser.mobile, Templates.FREE_PRESS_REJECTED, []);
+          console.log(`📱 Sent WhatsApp free press rejected notification [11free_press_rejected] to ${creatorUser.name} (${creatorUser.mobile})`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp free press rejected notification:", whatsappErr.message);
+        }
+      }
+    }
     console.log(`Conference ${conference.conferenceId} saved with status: ${conference.status}`);
     console.log(`Targeting configuration:`, {
       allStates: conference.allStates,

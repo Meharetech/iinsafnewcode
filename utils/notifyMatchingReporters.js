@@ -197,6 +197,10 @@ const notifyMatchingReporters = async (ad) => {
       message = `🎤 New Free Conference: "${ad.topic || 'Untitled Conference'}"`;
       subject = "Free Conference Notification";
       description = ad.topic || 'New Free Conference';
+    } else if (ad.type === "paid-conference") {
+      message = `🎤 New Paid Conference: "${ad.topic || 'Untitled Conference'}"`;
+      subject = "Paid Conference Notification";
+      description = ad.topic || 'New Paid Conference';
     } else {
       message = `📰 New Ad Approved: "${ad.mediaDescription || 'Untitled'}"`;
       subject = "Ad Notification";
@@ -206,12 +210,44 @@ const notifyMatchingReporters = async (ad) => {
     // Create response records and send notifications
     for (const user of matchedUsers) {
       try {
-        // Check if this is an advertisement (Adpost model), free ad (freeAdModel), or Raise Your Voice
-        const Adpost = require('../models/advertismentPost/advertisementPost');
-        const freeAdModel = require('../models/adminModels/freeAds/freeAdsSchema');
+        if (ad.type === "free-conference") {
+          // Send WhatsApp notification for Free Conference invitation [34free_conf_invite]
+          if (user.mobile) {
+            try {
+              const notifyOnWhatsapp = require('./notifyOnWhatsapp');
+              const Templates = require('./whatsappTemplates');
+              await notifyOnWhatsapp(user.mobile, Templates.FREE_CONF_INVITE, []);
+              console.log(`📱 Sent WhatsApp notification [34free_conf_invite] to ${user.name} (${user.mobile})`);
+            } catch (whatsappErr) {
+              console.error(`❌ Failed to send WhatsApp free conference invitation to ${user.name}:`, whatsappErr.message);
+            }
+          }
+          if (user.email) {
+            await sendEmail(user.email, subject, message);
+          }
+        } else if (ad.type === "paid-conference") {
+          // Send WhatsApp notification for Paid Conference invitation [37paid_conf_invite]
+          if (user.mobile) {
+            try {
+              const notifyOnWhatsapp = require('./notifyOnWhatsapp');
+              const Templates = require('./whatsappTemplates');
+              const amount = String(ad.amountPerReporter || 0);
+              await notifyOnWhatsapp(user.mobile, Templates.PAID_CONF_INVITE, [amount]);
+              console.log(`📱 Sent WhatsApp notification [37paid_conf_invite] to ${user.name} (${user.mobile}) with amount ₹${amount}`);
+            } catch (whatsappErr) {
+              console.error(`❌ Failed to send WhatsApp paid conference invitation to ${user.name}:`, whatsappErr.message);
+            }
+          }
+          if (user.email) {
+            await sendEmail(user.email, subject, message);
+          }
+        } else {
+          // Check if this is an advertisement (Adpost model), free ad (freeAdModel), or Raise Your Voice
+          const Adpost = require('../models/advertismentPost/advertisementPost');
+          const freeAdModel = require('../models/adminModels/freeAds/freeAdsSchema');
 
-        const isPaidAdvertisement = await Adpost.findById(ad._id);
-        const isFreeAd = await freeAdModel.findById(ad._id);
+          const isPaidAdvertisement = await Adpost.findById(ad._id);
+          const isFreeAd = await freeAdModel.findById(ad._id);
 
         if (isPaidAdvertisement) {
           // This is a paid advertisement - add to acceptRejectReporterList
@@ -235,6 +271,23 @@ const notifyMatchingReporters = async (ad) => {
             });
             await isPaidAdvertisement.save();
             console.log(`📝 Added user to paid advertisement acceptRejectReporterList: ${user.name} (${user.iinsafId})`);
+
+            // Send WhatsApp notification for newly assigned paid ad
+            if (user.mobile) {
+              const adWorth = isPaidAdvertisement.finalReporterPrice || 0;
+              try {
+                const notifyOnWhatsapp = require('./notifyOnWhatsapp');
+                const Templates = require('./whatsappTemplates');
+                await notifyOnWhatsapp(
+                  user.mobile,
+                  Templates.ADS_ASSIGNED,
+                  [String(adWorth)] // Pass the ad worth/budget as the parameter {{1}}
+                );
+                console.log(`📱 Sent WhatsApp notification [25ads_assigned] to ${user.name} (${user.mobile}) for ad worth ₹${adWorth}`);
+              } catch (whatsappErr) {
+                console.error(`❌ Failed to send WhatsApp notification to ${user.name}:`, whatsappErr.message);
+              }
+            }
           } else {
             console.log(`📝 User already exists in paid advertisement acceptRejectReporterList: ${user.name} (${user.iinsafId})`);
           }
@@ -271,8 +324,14 @@ const notifyMatchingReporters = async (ad) => {
               await sendEmail(user.email, subject, message);
             }
             if (user.mobile) {
-              console.log(`📱 Sending WhatsApp to: ${user.mobile}`);
-              await sendWhatsappNotification(user.mobile, description, ad._id);
+              try {
+                const notifyOnWhatsapp = require('./notifyOnWhatsapp');
+                const Templates = require('./whatsappTemplates');
+                await notifyOnWhatsapp(user.mobile, Templates.REWARD_TASK_ASSIGNED, []);
+                console.log(`📱 Sent WhatsApp notification [32reward_task_assigned] to ${user.name} (${user.mobile})`);
+              } catch (whatsappErr) {
+                console.error(`❌ Failed to send WhatsApp notification to ${user.name}:`, whatsappErr.message);
+              }
             }
           } else {
             // User already exists - preserve their existing record and SKIP notifications
@@ -314,10 +373,11 @@ const notifyMatchingReporters = async (ad) => {
             console.log(`📝 Created/updated influencer response record for: ${user.name} (${user.iinsafId})`);
           }
         }
-      } catch (userError) {
-        console.error(`❌ Error processing user ${user.name}:`, userError);
-        // Continue with other users even if one fails
       }
+    } catch (userError) {
+      console.error(`❌ Error processing user ${user.name}:`, userError);
+      // Continue with other users even if one fails
+    }
     }
 
     console.log(`✅ Notifications sent and response records created for ${matchedUsers.length} ${targetRoles.length > 1 ? 'users' : targetRoles[0].toLowerCase()}s.`);

@@ -65,16 +65,14 @@ const approveWithdrawal = async (req, res) => {
         `
       );
 
-      // 📱 WhatsApp notification
+      // 📱 WhatsApp notification (New template only)
       if (reporter.mobile) {
-        await notifyOnWhatsapp(
-          reporter.mobile,
-          Templates.NOTIFY_TO_REPORTER_AFTER_APPROVE_WITHDRAWAL_REQUEST, // ✅ AiSensy template
-          [
-            reporter.name, // {{1}} -> reporter name
-            String(request.amount), // {{2}} -> withdrawal amount
-          ]
-        );
+        try {
+          await notifyOnWhatsapp(reporter.mobile, Templates.WITHDRAW_SUCCESS, [String(request.amount)]);
+          console.log(`📱 Sent WhatsApp notification [41withdraw_success] to ${reporter.name} (${reporter.mobile}) for ₹${request.amount}`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp withdraw success notification:", whatsappErr.message);
+        }
       }
     }
 
@@ -145,17 +143,15 @@ const rejectWithdrawal = async (req, res) => {
         `
       );
 
-      // 📱 WhatsApp notification
-  if (reporter.mobile) {
-    await notifyOnWhatsapp(
-      reporter.mobile,
-      Templates.NOTIFY_TO_REPORTER_AFTER_REJECTED_WITHDRAWAL_REQUEST, // ✅ AiSensy template
-      [
-        reporter.name,     // {{1}} -> reporter name
-        String(request.amount)     // {{2}} -> rejected amount
-      ]
-    );
-  }
+      // 📱 WhatsApp notification (New template only)
+      if (reporter.mobile) {
+        try {
+          await notifyOnWhatsapp(reporter.mobile, Templates.WITHDRAW_REJECTED, [String(request.amount)]);
+          console.log(`📱 Sent WhatsApp notification [42withdraw_rejected] to ${reporter.name} (${reporter.mobile}) for ₹${request.amount}`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp withdraw rejected notification:", whatsappErr.message);
+        }
+      }
     }
 
     return res.status(200).json({

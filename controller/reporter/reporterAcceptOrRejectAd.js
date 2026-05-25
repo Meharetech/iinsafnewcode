@@ -179,6 +179,18 @@ const acceptAd = async (req, res) => {
     await session.commitTransaction();
     console.log("🔍 Accept Ad Debug - Ad saved successfully");
 
+    // 📱 Send WhatsApp notification to reporter/influencer
+    if (user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(user.mobile, Templates.ADS_ACCEPTED, []);
+        console.log(`📱 Sent WhatsApp acceptance notification [26ads_accepted] to ${user.name} (${user.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp ad acceptance notification:", whatsappErr.message);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: "Ad accepted successfully",

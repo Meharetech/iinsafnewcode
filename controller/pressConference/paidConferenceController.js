@@ -304,6 +304,36 @@ const submitPaidConference = async (req, res) => {
 
     await paidConference.save();
 
+    // 📱 Send WhatsApp notifications to creator user:
+    const creatorUser = await PressConferenceUser.findById(userId);
+    if (creatorUser && creatorUser.mobile) {
+      // 1. Send Paid Press Created notification [8paid_press_created]
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(creatorUser.mobile, Templates.PAID_PRESS_CREATED, []);
+        console.log(`📱 Sent WhatsApp paid press created notification [8paid_press_created] to ${creatorUser.name} (${creatorUser.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp paid press created notification:", whatsappErr.message);
+      }
+
+      // 2. Send Paid Press Payment Success notification [9paid_press_payment_success]
+      if (paidConference.paymentStatus === "paid") {
+        try {
+          const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+          const Templates = require("../../utils/whatsappTemplates");
+          await notifyOnWhatsapp(
+            creatorUser.mobile, 
+            Templates.PAID_PRESS_PAYMENT_SUCCESS, 
+            [String(totalAmount)] // {{1}} -> payment amount
+          );
+          console.log(`📱 Sent WhatsApp paid press payment success notification [9paid_press_payment_success] of amount ₹${totalAmount} to ${creatorUser.name} (${creatorUser.mobile})`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp paid press payment success notification:", whatsappErr.message);
+        }
+      }
+    }
+
     // If payment was successful, save payment history
     if (paymentId || walletPaymentId) {
       const newHistory = new paymentHistory({
@@ -729,6 +759,67 @@ const adminActionPaidConference = async (req, res) => {
     };
 
     await conference.save();
+
+    // 📱 Send WhatsApp notifications on Paid Press Conference Admin Action
+    const creatorUser = await PressConferenceUser.findById(conference.submittedBy);
+    if (creatorUser && creatorUser.mobile) {
+      if (action === "approved") {
+        try {
+          const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+          const Templates = require("../../utils/whatsappTemplates");
+          await notifyOnWhatsapp(creatorUser.mobile, Templates.PAID_PRESS_APPROVED, []);
+          console.log(`📱 Sent WhatsApp paid press approved notification [13paid_press_approved] to ${creatorUser.name} (${creatorUser.mobile})`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp paid press approved notification:", whatsappErr.message);
+        }
+      } else if (action === "rejected") {
+        try {
+          const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+          const Templates = require("../../utils/whatsappTemplates");
+          await notifyOnWhatsapp(creatorUser.mobile, Templates.PAID_PRESS_REJECTED, []);
+          console.log(`📱 Sent WhatsApp paid press rejected notification [14paid_press_rejected] to ${creatorUser.name} (${creatorUser.mobile})`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp paid press rejected notification:", whatsappErr.message);
+        }
+      }
+    }
+
+    // Send notifications to matching reporters only when admin approves or modifies
+    if (action === "approved" || action === "modified") {
+      try {
+        console.log(`🔔 Sending notifications to reporters for paid conference ${conference.conferenceId}`);
+        const notifyMatchingReporters = require("../../utils/notifyMatchingReporters");
+
+        // Prepare paid conference data for notification
+        const conferenceForNotification = {
+          _id: conference._id,
+          conferenceId: conference.conferenceId,
+          topic: conference.topic,
+          purpose: conference.purpose,
+          conferenceDate: conference.conferenceDate,
+          conferenceTime: conference.conferenceTime,
+          timePeriod: conference.timePeriod,
+          state: conference.state,
+          city: conference.city,
+          place: conference.place,
+          landmark: conference.landmark,
+          // Admin targeting configuration
+          allStates: conference.allStates,
+          adminSelectState: conference.adminSelectState,
+          adminSelectCities: conference.adminSelectCities,
+          adminSelectPincode: conference.adminSelectPincode,
+          reporterId: conference.reporterId,
+          status: conference.status,
+          type: "paid-conference",
+          amountPerReporter: conference.commissionDetails?.amountPerReporter || 0
+        };
+
+        await notifyMatchingReporters(conferenceForNotification);
+        console.log(`✅ Notifications sent successfully for paid conference ${conference.conferenceId}`);
+      } catch (notificationError) {
+        console.error(`❌ Error sending notifications for paid conference ${conference.conferenceId}:`, notificationError);
+      }
+    }
 
     console.log(`Conference ${conferenceId} saved with status: ${conference.status}`);
     console.log(`Targeting configuration:`, {
@@ -1242,6 +1333,21 @@ const completePaidConference = async (req, res) => {
         );
       }
 
+      // 📱 Send WhatsApp notification to reporter for Paid Conference Completed [39paid_conf_completed]
+      const User = require("../../models/userModel/userModel");
+      const reporterUser = await User.findById(reporterId);
+      if (reporterUser && reporterUser.mobile) {
+        try {
+          const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+          const Templates = require("../../utils/whatsappTemplates");
+          const amount = String(conference.commissionDetails?.amountPerReporter || 0);
+          await notifyOnWhatsapp(reporterUser.mobile, Templates.PAID_CONF_COMPLETED_REPORTER, [amount]);
+          console.log(`📱 Sent WhatsApp notification [39paid_conf_completed] to ${reporterUser.name} (${reporterUser.mobile}) with amount ₹${amount}`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp paid conference completed reporter notification:", whatsappErr.message);
+        }
+      }
+
       console.log(`Proof approved for reporter ${reporterId} in conference ${conferenceId}`);
 
       // 🔑 CRITICAL FIX: Check completion based on required number of reporters, not all accepted
@@ -1275,6 +1381,22 @@ const completePaidConference = async (req, res) => {
 
         console.log(`All proofs approved. Conference ${conferenceId} marked as completed`);
 
+        // 📱 Send WhatsApp notification for paid press conference completed
+        const finishedConf = await PaidConference.findOne({ conferenceId: conferenceId });
+        if (finishedConf && finishedConf.submittedBy) {
+          const creatorUser = await PressConferenceUser.findById(finishedConf.submittedBy);
+          if (creatorUser && creatorUser.mobile) {
+            try {
+              const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+              const Templates = require("../../utils/whatsappTemplates");
+              await notifyOnWhatsapp(creatorUser.mobile, Templates.PAID_PRESS_COMPLETED, []);
+              console.log(`📱 Sent WhatsApp paid press completed notification [15paid_press_completed] to ${creatorUser.name} (${creatorUser.mobile})`);
+            } catch (whatsappErr) {
+              console.error("❌ Failed to send WhatsApp paid press completed notification:", whatsappErr.message);
+            }
+          }
+        }
+
         return res.status(200).json({
           success: true,
           message: "Proof approved and conference completed successfully",
@@ -1306,6 +1428,21 @@ const completePaidConference = async (req, res) => {
               acceptedReporter.proof.approvedAt = new Date();
               acceptedReporter.proof.approvedBy = adminId;
             }
+
+            // 📱 Send WhatsApp notification to reporter for Paid Conference Completed [39paid_conf_completed]
+            const User = require("../../models/userModel/userModel");
+            const reporterUser = await User.findById(acceptedReporter.reporterId);
+            if (reporterUser && reporterUser.mobile) {
+              try {
+                const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+                const Templates = require("../../utils/whatsappTemplates");
+                const amount = String(conference.commissionDetails?.amountPerReporter || 0);
+                await notifyOnWhatsapp(reporterUser.mobile, Templates.PAID_CONF_COMPLETED_REPORTER, [amount]);
+                console.log(`📱 Sent WhatsApp notification [39paid_conf_completed] to ${reporterUser.name} (${reporterUser.mobile}) with amount ₹${amount}`);
+              } catch (whatsappErr) {
+                console.error("❌ Failed to send WhatsApp paid conf completed reporter notification:", whatsappErr.message);
+              }
+            }
           }
         }
       }
@@ -1318,6 +1455,19 @@ const completePaidConference = async (req, res) => {
       await conference.save();
 
       console.log(`Paid conference ${conferenceId} completed successfully`);
+
+      // 📱 Send WhatsApp notification for paid press conference completed
+      const creatorUser = await PressConferenceUser.findById(conference.submittedBy);
+      if (creatorUser && creatorUser.mobile) {
+        try {
+          const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+          const Templates = require("../../utils/whatsappTemplates");
+          await notifyOnWhatsapp(creatorUser.mobile, Templates.PAID_PRESS_COMPLETED, []);
+          console.log(`📱 Sent WhatsApp paid press completed notification [15paid_press_completed] to ${creatorUser.name} (${creatorUser.mobile})`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp paid press completed notification:", whatsappErr.message);
+        }
+      }
 
       return res.status(200).json({
         success: true,
@@ -1457,6 +1607,24 @@ const creditReporterWallet = async (reporterId, amount, conferenceId) => {
     await wallet.save({ session });
 
     await session.commitTransaction();
+
+    // 📱 Send WhatsApp wallet credit success notification [53wallet_credit_success]
+    try {
+      const User = require('../../models/userModel/userModel');
+      const reporter = await User.findById(reporterId);
+      if (reporter && reporter.mobile) {
+        const notifyOnWhatsapp = require('../../utils/notifyOnWhatsapp');
+        const Templates = require('../../utils/whatsappTemplates');
+        await notifyOnWhatsapp(
+          String(reporter.mobile),
+          Templates.WALLET_CREDIT_SUCCESS,
+          [String(amount)]
+        );
+        console.log(`📱 Sent WhatsApp wallet credit success notification [53wallet_credit_success] to ${reporter.name} (${reporter.mobile}) for conference ${conferenceId}`);
+      }
+    } catch (whatsappErr) {
+      console.error("❌ Failed to send WhatsApp wallet credit success notification:", whatsappErr.message);
+    }
 
     console.log(`✅ Reporter wallet credited successfully with transaction:
       Previous Balance: ₹${previousBalance}

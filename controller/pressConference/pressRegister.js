@@ -111,6 +111,18 @@ const verifyOtp = async (req, res) => {
     await wallet.save();
     console.log(`✅ Wallet created for press user: ${user._id} with balance: ₹0`);
 
+    // 📱 Send WhatsApp notification for Press Conference registration
+    if (user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(user.mobile, Templates.PRESS_CONF_REGISTERED, []);
+        console.log(`📱 Sent WhatsApp Press Conference registration notification [6press_conf_registered] to ${user.name} (${user.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp Press Conference registration notification:", whatsappErr.message);
+      }
+    }
+
     pendingPressRegistrations.delete(key);
 
     return res.status(200).json({

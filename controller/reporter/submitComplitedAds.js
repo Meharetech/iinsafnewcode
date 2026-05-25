@@ -280,6 +280,18 @@ const submitComplitedAds = async (req, res) => {
       }
     );
 
+    // 📱 Send WhatsApp notification for proof submission
+    if (req.user && req.user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(req.user.mobile, Templates.ADS_FINAL_PROOF_SUBMITTED, []);
+        console.log(`📱 Sent WhatsApp proof submission notification [30ads_final_proof_submitted] to ${req.user.name} (${req.user.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp proof submission notification:", whatsappErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "Completion screenshot submitted successfully. Admin will review and approve to mark as completed.",

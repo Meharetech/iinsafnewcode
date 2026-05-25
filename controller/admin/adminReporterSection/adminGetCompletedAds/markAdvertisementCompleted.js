@@ -281,6 +281,18 @@ const markAdvertisementCompleted = async (req, res) => {
       shouldRefund: shouldRefund
     });
 
+    // 📱 Send WhatsApp campaign completed notification [47campaign_completed]
+    if (advertisement && advertisement.owner && advertisement.owner.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../../../utils/notifyOnWhatsapp");
+        const Templates = require("../../../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(String(advertisement.owner.mobile), Templates.CAMPAIGN_COMPLETED, []);
+        console.log(`📱 Sent WhatsApp campaign completed notification [47campaign_completed] to ${advertisement.owner.name} (${advertisement.owner.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp campaign completed notification:", whatsappErr.message);
+      }
+    }
+
     res.status(200).json(response);
 
   } catch (error) {

@@ -3,8 +3,20 @@ const axios = require("axios");
 const sendWhatsappNotification = async (mobile, adTitle, adId) => {
   try {
     const apiKey = process.env.AISENSY_API_KEY;
+    if (!apiKey) {
+      console.warn("⚠️ AISENSY_API_KEY is not defined in environment variables. WhatsApp notification will not be sent.");
+      return { success: false, message: "AiSensy API key missing" };
+    }
     const campaignName = "lead_update";
-    const destination = `91${mobile}`;
+    // Clean and normalize destination mobile number
+    let cleanMobile = mobile.toString().replace(/\D/g, ''); // Keep digits only
+    if (cleanMobile.length === 11 && cleanMobile.startsWith("0")) {
+      cleanMobile = cleanMobile.substring(1);
+    }
+    if (cleanMobile.length === 10) {
+      cleanMobile = "91" + cleanMobile;
+    }
+    const destination = cleanMobile;
     const userName = "iinsaf-new";
     const source = "new-landing-page form";
 

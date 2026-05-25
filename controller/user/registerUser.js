@@ -6,6 +6,8 @@ const axios = require("axios");
 require("dotenv").config();
 const wallet = require("../../models/Wallet/walletSchema");
 const { sendEmail, getOtpTemplate } = require("../../utils/emailTemplates");
+const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+const Templates = require("../../utils/whatsappTemplates");
 
 // Temporary storage for unverified users
 const pendingRegistrations = new Map();
@@ -133,6 +135,26 @@ const verifyOtp = async (req, res) => {
 
     await user.save();
     console.log("✅ User saved successfully:", userData.role);
+
+    // Send WhatsApp notification if the user is a Reporter and has a mobile number
+    if (user.role === "Reporter" && user.mobile) {
+      try {
+        await notifyOnWhatsapp(user.mobile, Templates.REPORTER_REGISTERED, []);
+        console.log(`[WhatsApp Notification] Sent registration notification to reporter: ${user.mobile}`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp notification on registration:", whatsappErr.message);
+      }
+    }
+
+    // Send WhatsApp notification if the user is an Influencer and has a mobile number
+    if (user.role === "Influencer" && user.mobile) {
+      try {
+        await notifyOnWhatsapp(user.mobile, Templates.INFLUENCER_REGISTERED, []);
+        console.log(`[WhatsApp Notification] Sent registration notification to influencer: ${user.mobile}`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp notification on registration:", whatsappErr.message);
+      }
+    }
 
     // Create wallet for the user
     try {

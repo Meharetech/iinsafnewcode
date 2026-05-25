@@ -193,6 +193,18 @@ const verifyPodcastOtp = async (req, res) => {
 
     await newUser.save();
 
+    // 📱 Send WhatsApp notification for Podcast registration [16podcast_registered]
+    if (newUser.phoneNo) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(newUser.phoneNo, Templates.PODCAST_REGISTERED, []);
+        console.log(`📱 Sent WhatsApp Podcast registration notification [16podcast_registered] to ${newUser.name} (${newUser.phoneNo})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp Podcast registration notification:", whatsappErr.message);
+      }
+    }
+
     // Clean up pending registration
     pendingPodcastRegistrations.delete(key);
 

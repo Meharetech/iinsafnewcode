@@ -36,6 +36,18 @@ const forgetPassword = async (req, res) => {
     );
     console.log(`[EMAIL OTP INFO] Sent Password Reset OTP: ${otp} to Email: ${email}`);
 
+    // 📱 Send WhatsApp notification for password reset request
+    if (user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(user.mobile, Templates.PASSWORD_RESET_REQUEST, []);
+        console.log(`📱 Sent WhatsApp password reset request notification [51password_reset_request] to ${user.name} (${user.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp password reset request notification:", whatsappErr.message);
+      }
+    }
+
     res.status(200).json({ message: "OTP sent to your email" });
 
   } catch (error) {
@@ -89,6 +101,18 @@ const setNewPassword = async (req, res) => {
     user.resetOTPExpires = undefined;
 
     await user.save();
+
+    // 📱 Send WhatsApp notification for successful password change
+    if (user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(user.mobile, Templates.PASSWORD_CHANGED, []);
+        console.log(`📱 Sent WhatsApp password changed notification [50password_changed] to ${user.name} (${user.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp password changed notification:", whatsappErr.message);
+      }
+    }
 
     // Generate JWT token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
@@ -145,7 +169,25 @@ const updatePassword = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    await User.findByIdAndUpdate(userId, { password: hashedPassword });
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.password = hashedPassword;
+    await user.save();
+
+    // 📱 Send WhatsApp notification for successful password change
+    if (user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(user.mobile, Templates.PASSWORD_CHANGED, []);
+        console.log(`📱 Sent WhatsApp password changed notification [50password_changed] to ${user.name} (${user.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp password changed notification:", whatsappErr.message);
+      }
+    }
 
     res.status(200).json({ message: "Password updated successfully" });
   } catch (error) {

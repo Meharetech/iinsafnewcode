@@ -153,12 +153,7 @@ const approveIdCardStatus = async (req, res) => {
       await notifyOnWhatsapp(
         updatedCard.mobileNo,
         Templates.AFTER_ID_CARD_APPROVED_NOTIFY_TO_REPORTER,
-        [
-          updatedCard.name, // {{1}} reporter name
-          issuedDate,       // {{2}} issued date
-          validUpto,        // {{3}} valid upto
-          iinsafId,         // {{4}} ID card number
-        ]
+        [] // No parameters for this template
       );
     }
 
@@ -216,11 +211,8 @@ const rejectIdCard = async (req, res) => {
     if (updatedCard.mobileNo) {
       await notifyOnWhatsapp(
         updatedCard.mobileNo,
-        Templates.AFTER_ID_CARD_REJECTED_NOTIFY_TO_REPORTER, // campaign: after_id_card_rejected_notify_to_reporter
-        [
-          updatedCard.name, // {{1}} -> reporter name
-          rejectNote || "No reason provided", // {{2}} -> rejection reason
-        ]
+        Templates.AFTER_ID_CARD_REJECTED_NOTIFY_TO_REPORTER, // campaign: 24id_card_rejected
+        [] // No parameters for this template
       );
     }
 

@@ -126,6 +126,20 @@ const reporterWithdrawal = async (req, res) => {
       }
     }
 
+    // 📱 Send WhatsApp withdrawal request submitted notification [54withdraw_request_submitted] to the reporter
+    if (req.user && req.user.mobile) {
+      try {
+        await notifyOnWhatsapp(
+          String(req.user.mobile),
+          Templates.WITHDRAW_REQUEST_SUBMITTED,
+          [String(amount)]
+        );
+        console.log(`📱 Sent WhatsApp withdrawal request submitted notification [54withdraw_request_submitted] to ${req.user.name} (${req.user.mobile}) for amount ₹${amount}`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp withdrawal request submitted notification:", whatsappErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       status: "request_submitted",

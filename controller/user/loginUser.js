@@ -94,6 +94,18 @@ const loginUser = async (req, res) => {
       console.error("Notification error:", notifyErr.message);
     }
 
+    // 📱 Send WhatsApp login notification if user is Advertiser [43iinsaf_ads_login]
+    if (user.role === "Advertiser" && user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(String(user.mobile), Templates.IINSAF_ADS_LOGIN, [user.name]);
+        console.log(`📱 Sent WhatsApp advertiser login notification [43iinsaf_ads_login] to ${user.name} (${user.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp advertiser login notification:", whatsappErr.message);
+      }
+    }
+
     // ✅ Return JWT token with role
     const payload = {
       userId: { id: user._id },

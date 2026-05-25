@@ -113,6 +113,14 @@ const processNotificationsInBackground = async (ad) => {
         Templates.NOTIFY_TO_ADVERTISER_AFTER_AD_APPROVED,
         [advertiser.name, ad.adType]
       );
+
+      // 📱 Send WhatsApp campaign approved notification [45campaign_approved]
+      try {
+        await notifyOnWhatsapp(String(advertiser.mobile), Templates.CAMPAIGN_APPROVED, []);
+        console.log(`📱 Sent WhatsApp campaign approved notification [45campaign_approved] to ${advertiser.name} (${advertiser.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp campaign approved notification:", whatsappErr.message);
+      }
     }
 
     console.log(`✅ Background notifications completed for ad: ${ad._id}`);
@@ -702,6 +710,14 @@ const rejectedAds = async (req, res) => {
             refundId, // {{5}}
           ]
         );
+
+        // 📱 Send WhatsApp campaign rejected notification [46campaign_rejected]
+        try {
+          await notifyOnWhatsapp(String(advertiser.mobile), Templates.CAMPAIGN_REJECTED, []);
+          console.log(`📱 Sent WhatsApp campaign rejected notification [46campaign_rejected] to ${advertiser.name} (${advertiser.mobile})`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp campaign rejected notification:", whatsappErr.message);
+        }
       }
     }
 

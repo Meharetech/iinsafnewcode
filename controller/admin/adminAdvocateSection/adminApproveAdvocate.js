@@ -78,6 +78,18 @@ const rejectAdvocate = async (req, res) => {
         advocate.accountStatus = "Rejected";
         await advocate.save();
 
+        // 📱 Send WhatsApp advocate rejected notification [49advocate_rejected]
+        if (advocate.phoneNo) {
+            try {
+                const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+                const Templates = require("../../../utils/whatsappTemplates");
+                await notifyOnWhatsapp(String(advocate.phoneNo), Templates.ADVOCATE_REJECTED, []);
+                console.log(`📱 Sent WhatsApp advocate rejected notification [49advocate_rejected] to ${advocate.name} (${advocate.phoneNo})`);
+            } catch (whatsappErr) {
+                console.error("❌ Failed to send WhatsApp advocate rejected notification:", whatsappErr.message);
+            }
+        }
+
         // Send email notification
         try {
             await sendEmail(

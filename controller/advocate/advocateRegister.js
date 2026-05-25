@@ -198,6 +198,18 @@ const verifyOtp = async (req, res) => {
     await user.save();
     console.log("✅ Advocate user saved:", user._id);
 
+    // 📱 Send WhatsApp advocate registered notification [48advocate_registered]
+    if (user.phoneNo) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(String(user.phoneNo), Templates.ADVOCATE_REGISTERED, []);
+        console.log(`📱 Sent WhatsApp advocate registered notification [48advocate_registered] to ${user.name} (${user.phoneNo})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp advocate registered notification:", whatsappErr.message);
+      }
+    }
+
     // Create wallet for the new advocate user with default balance 0
     try {
       const wallet = new Wallet({

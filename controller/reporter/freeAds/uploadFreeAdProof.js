@@ -204,6 +204,18 @@ const uploadFreeAdProof = async (req, res) => {
 
     await session.commitTransaction();
 
+    // 📱 Send WhatsApp notification for proof submission
+    if (req.user && req.user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+        const Templates = require("../../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(req.user.mobile, Templates.ADS_PROOF_SUBMITTED, []);
+        console.log(`📱 Sent WhatsApp proof submission notification [27ads_proof_submitted] to ${req.user.name} (${req.user.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp free ad proof submission notification:", whatsappErr.message);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: "Proof submitted successfully",

@@ -200,13 +200,23 @@ const adminApproveAdsProof = async (req, res) => {
       if (userForWallet.mobile) {
         await notifyOnWhatsapp(
           userForWallet.mobile,
-          Templates.ADMIN_APPROVE_PROOF_UPLOADED_NOTIFY_TO_REPORTER, // "admin_approve_proof_uploaded_notify_to_reporter"
+          Templates.ADS_FINAL_PROOF_APPROVED,
           [
-            userForWallet.name, // {{1}} -> user name
-            adId, // {{2}} -> ad ID
-            String(paymentAmount),     // {{3}} -> credited amount (must be string ✅)
+            String(paymentAmount), // {{1}} -> credited amount / amount earned
           ]
         );
+
+        // 📱 Send WhatsApp wallet credit success notification [53wallet_credit_success]
+        try {
+          await notifyOnWhatsapp(
+            userForWallet.mobile,
+            Templates.WALLET_CREDIT_SUCCESS,
+            [String(paymentAmount)]
+          );
+          console.log(`📱 Sent WhatsApp wallet credit success notification [53wallet_credit_success] to ${userForWallet.name} (${userForWallet.mobile})`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp wallet credit success notification:", whatsappErr.message);
+        }
       }
     }
 
@@ -230,6 +240,14 @@ const adminApproveAdsProof = async (req, res) => {
               adId, // {{2}} -> ad ID
             ]
           );
+
+          // 📱 Send WhatsApp campaign completed notification [47campaign_completed]
+          try {
+            await notifyOnWhatsapp(String(ad.owner.mobile), Templates.CAMPAIGN_COMPLETED, []);
+            console.log(`📱 Sent WhatsApp campaign completed notification [47campaign_completed] to ${ad.owner.name} (${ad.owner.mobile})`);
+          } catch (whatsappErr) {
+            console.error("❌ Failed to send WhatsApp campaign completed notification:", whatsappErr.message);
+          }
         }
       }
     }
@@ -331,13 +349,8 @@ async function adminRejectAdsProof(req, res) {
       if (user.mobile) {
         await notifyOnWhatsapp(
           user.mobile,
-          Templates.ADMIN_REJECT_PROOF_UPLOADED_NOTIFY_TO_REPORTER, // Template works for both
-          [
-            user.name,
-            adId,
-            adminNote || "No reason provided",
-            adminName,
-          ]
+          Templates.ADS_PROOF_REJECTED,
+          []
         );
       }
     }

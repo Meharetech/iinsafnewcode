@@ -82,6 +82,20 @@ const ryvPost = async (req, res) => {
 
     await newPost.save();
 
+    // 📱 Send WhatsApp notification to user who created the RYV post
+    if (phoneNo) {
+      try {
+        await notifyOnWhatsapp(
+          phoneNo,
+          Templates.RYV_CREATED,
+          []
+        );
+        console.log(`📱 Sent WhatsApp RYV created notification [2rise_voice_created] to ${name} (${phoneNo})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp RYV created notification:", whatsappErr.message);
+      }
+    }
+
     // 🔹 Find SuperAdmins and SubAdmins assigned to "Raise Your Voice"
 const admins = await Admin.find({
   $or: [

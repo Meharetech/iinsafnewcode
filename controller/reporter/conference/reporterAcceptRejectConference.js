@@ -97,6 +97,18 @@ const acceptConference = async (req, res) => {
 
     await reporterConference.save();
 
+    // 📱 Send WhatsApp notification for Free Conference Accepted [35free_conf_accepted]
+    if (reporter && reporter.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+        const Templates = require("../../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(reporter.mobile, Templates.FREE_CONF_ACCEPTED, []);
+        console.log(`📱 Sent WhatsApp notification [35free_conf_accepted] to ${reporter.name} (${reporter.mobile})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp free conference accepted notification:", whatsappErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "Conference accepted successfully",

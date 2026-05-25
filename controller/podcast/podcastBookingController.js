@@ -105,6 +105,21 @@ const submitPodcastBooking = async (req, res) => {
 
     await booking.save();
 
+    // 📱 Send WhatsApp notification for Podcast booking creation [17podcast_booking_created]
+    // Fetch user details to get the mobile number
+    const PodcastUser = require("../../models/podcastUser/podcastUserSchema");
+    const creatorUser = await PodcastUser.findById(userId);
+    if (creatorUser && creatorUser.phoneNo) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(creatorUser.phoneNo, Templates.PODCAST_BOOKING_CREATED, []);
+        console.log(`📱 Sent WhatsApp Podcast Booking Created notification [17podcast_booking_created] to ${creatorUser.name} (${creatorUser.phoneNo})`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp Podcast Booking Created notification:", whatsappErr.message);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Podcast booking request submitted successfully',

@@ -163,6 +163,19 @@ const acceptPaidConference = async (req, res) => {
       requiredReporters: requiredReporters
     });
 
+    // 📱 Send WhatsApp notification for Paid Conference Accepted [38paid_conf_accepted]
+    if (reporter && reporter.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+        const Templates = require("../../../utils/whatsappTemplates");
+        const amount = String(updatedConference.commissionDetails?.amountPerReporter || 0);
+        await notifyOnWhatsapp(reporter.mobile, Templates.PAID_CONF_ACCEPTED, [amount]);
+        console.log(`📱 Sent WhatsApp notification [38paid_conf_accepted] to ${reporter.name} (${reporter.mobile}) with amount ₹${amount}`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp paid conference accepted notification:", whatsappErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "Paid conference accepted successfully",
@@ -326,6 +339,24 @@ const creditReporterWallet = async (reporterId, amount, conferenceId) => {
     });
     
     await wallet.save();
+
+    // 📱 Send WhatsApp wallet credit success notification [53wallet_credit_success]
+    try {
+      const User = require('../../../models/userModel/userModel');
+      const reporter = await User.findById(reporterId);
+      if (reporter && reporter.mobile) {
+        const notifyOnWhatsapp = require('../../../utils/notifyOnWhatsapp');
+        const Templates = require('../../../utils/whatsappTemplates');
+        await notifyOnWhatsapp(
+          String(reporter.mobile),
+          Templates.WALLET_CREDIT_SUCCESS,
+          [String(amount)]
+        );
+        console.log(`📱 Sent WhatsApp wallet credit success notification [53wallet_credit_success] to ${reporter.name} (${reporter.mobile}) for conference ${conferenceId}`);
+      }
+    } catch (whatsappErr) {
+      console.error("❌ Failed to send WhatsApp wallet credit success notification:", whatsappErr.message);
+    }
     
     console.log(`Reporter wallet credited successfully. New balance: ₹${wallet.balance}`);
     

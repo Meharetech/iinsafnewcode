@@ -403,6 +403,20 @@ const postAdd = async (req, res) => {
 
     await newAd.save();
 
+    // 📱 Send WhatsApp campaign launched notification [44campaign_launched]
+    try {
+      const User = require("../../models/userModel/userModel");
+      const advertiserUser = await User.findById(req.userId);
+      if (advertiserUser && advertiserUser.mobile) {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(String(advertiserUser.mobile), Templates.CAMPAIGN_LAUNCHED, []);
+        console.log(`📱 Sent WhatsApp campaign launched notification [44campaign_launched] to ${advertiserUser.name} (${advertiserUser.mobile})`);
+      }
+    } catch (whatsappErr) {
+      console.error("❌ Failed to send WhatsApp campaign launched notification:", whatsappErr.message);
+    }
+
     // ✅ Coupon logic
     if (body.couponCode) {
       const normalizedCode = String(body.couponCode).trim();
