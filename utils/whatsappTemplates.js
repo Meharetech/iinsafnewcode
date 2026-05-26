@@ -77,4 +77,16 @@ module.exports = {
     ADVOCATE_REJECTED: "49advocate_rejected",
     WALLET_CREDIT_SUCCESS: "53wallet_credit_success",
     WITHDRAW_REQUEST_SUBMITTED: "54withdraw_request_submitted",
+    WALLET_MIN_BALANCE: "58wallet_min_balance",
+    CAMPAIGN_LIVE: "59campaign_live",
+    ADS_EXPIRED: "61ads_expired",
+    REWARD_EXPIRED: "62reward_expired",
+    FREE_CONF_MISSED: "63free_conf_missed",
+    PAID_CONF_MISSED: "64paid_conf_missed",
+    VOICE_EXPIRED: "65voice_expired",
+    CAMPAIGN_PAYMENT_SUCCESS: "66campaign_payment_success",
+    CAMPAIGN_REFUND_SUCCESS: "67campaign_refund_success",
+    CAMPAIGN_REFUND_REJECTED: "68campaign_refund_rejected",
+    CAMPAIGN_ACCEPTED: "69campaign_accepted",
 };
+

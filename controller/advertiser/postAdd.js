@@ -412,6 +412,14 @@ const postAdd = async (req, res) => {
         const Templates = require("../../utils/whatsappTemplates");
         await notifyOnWhatsapp(String(advertiserUser.mobile), Templates.CAMPAIGN_LAUNCHED, []);
         console.log(`📱 Sent WhatsApp campaign launched notification [44campaign_launched] to ${advertiserUser.name} (${advertiserUser.mobile})`);
+
+        // Send WhatsApp campaign accepted notification [69campaign_accepted]
+        try {
+          await notifyOnWhatsapp(String(advertiserUser.mobile), Templates.CAMPAIGN_ACCEPTED, []);
+          console.log(`📱 Sent WhatsApp campaign accepted notification [69campaign_accepted] to ${advertiserUser.name} (${advertiserUser.mobile})`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp campaign accepted notification:", whatsappErr.message);
+        }
       }
     } catch (whatsappErr) {
       console.error("❌ Failed to send WhatsApp campaign launched notification:", whatsappErr.message);

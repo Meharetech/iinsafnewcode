@@ -413,6 +413,40 @@ const submitReporterProof = async (req, res) => {
       });
     }
 
+    // ✅ Check 3-day expiry from createdAt (72 hours limit for completion)
+    if (proofDoc.createdAt) {
+      const acceptedAt = new Date(proofDoc.createdAt);
+      const now = new Date();
+      const diffInMs = now - acceptedAt;
+      const threeDaysInMs = 3 * 24 * 60 * 60 * 1000; // 3 days (72 hours)
+
+      if (diffInMs > threeDaysInMs) {
+        console.log("❌ Raise Your Voice Task expired: User exceeded 3 days limit");
+
+        // Mark as rejected in RaiseYourVoiceProof
+        proofDoc.status = "rejected";
+        proofDoc.rejectionNote = "Raise Your Voice task expired: Task not completed within 3 days limit.";
+        await proofDoc.save();
+
+        // 📱 Send WhatsApp notification for Voice Expired [65voice_expired]
+        if (req.user && req.user.mobile) {
+          try {
+            const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+            const Templates = require("../../../utils/whatsappTemplates");
+            await notifyOnWhatsapp(req.user.mobile, Templates.VOICE_EXPIRED, []);
+            console.log(`📱 Sent WhatsApp voice task expired notification [65voice_expired] to ${req.user.name} (${req.user.mobile})`);
+          } catch (whatsappErr) {
+            console.error("❌ Failed to send WhatsApp voice task expired notification:", whatsappErr.message);
+          }
+        }
+
+        return res.status(403).json({
+          success: false,
+          message: "Raise Your Voice task rejected: You did not complete the task within the 3-day time limit."
+        });
+      }
+    }
+
     // 4. Update proof data in proofDoc only
     proofDoc.videoLink = videoLink;
     proofDoc.platform = platform;

@@ -59,6 +59,31 @@ const submitConferenceProof = async (req, res) => {
       });
     }
 
+    // Helper function to parse date and time strings into a Date object
+    const getConferenceDateTime = (dateStr, timeStr, periodStr) => {
+      try {
+        const parts = dateStr.replace(/\//g, "-").split("-").map(Number);
+        let year, month, day;
+        if (parts[0] > 1000) {
+          [year, month, day] = parts;
+        } else {
+          [day, month, year] = parts;
+        }
+
+        let [hours, minutes] = timeStr.split(":").map(Number);
+        const period = String(periodStr).trim().toUpperCase();
+        if (period === "PM" && hours < 12) {
+          hours += 12;
+        } else if (period === "AM" && hours === 12) {
+          hours = 0;
+        }
+        return new Date(year, month - 1, day, hours, minutes);
+      } catch (err) {
+        console.error("Error parsing conference date/time:", err);
+        return null;
+      }
+    };
+
     // Find the reporter conference
     const reporterConference = await ReporterConference.findOne({
       conferenceId: conferenceId,
@@ -92,6 +117,46 @@ const submitConferenceProof = async (req, res) => {
         success: false,
         message: "Accepted conference not found. Please make sure you have accepted this conference first.",
       });
+    }
+
+    // Check 72 hours expiry after conference date/time
+    if (reporterConference.conferenceDetails) {
+      const { conferenceDate, conferenceTime, timePeriod } = reporterConference.conferenceDetails;
+      if (conferenceDate && conferenceTime && timePeriod) {
+        const confDateObj = getConferenceDateTime(conferenceDate, conferenceTime, timePeriod);
+        if (confDateObj) {
+          const now = new Date();
+          const diffInMs = now - confDateObj;
+          const threeDaysInMs = 3 * 24 * 60 * 60 * 1000; // 3 days (72 hours)
+          if (diffInMs > threeDaysInMs) {
+            console.log("❌ Free Conference Missed: Reporter exceeded 72 hours limit after conference date/time");
+
+            // Mark status as rejected
+            reporterConference.status = "rejected";
+            reporterConference.rejectNote = "Missed conference session: Proof not submitted within 72 hours after conference date/time.";
+            await reporterConference.save();
+
+            // 📱 Send WhatsApp notification for Free Conf Missed [63free_conf_missed]
+            try {
+              const User = require("../../../models/userModel/userModel");
+              const reporterUser = await User.findById(reporterId);
+              if (reporterUser && reporterUser.mobile) {
+                const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+                const Templates = require("../../../utils/whatsappTemplates");
+                await notifyOnWhatsapp(reporterUser.mobile, Templates.FREE_CONF_MISSED, []);
+                console.log(`📱 Sent WhatsApp free conference missed notification [63free_conf_missed] to ${reporterUser.name} (${reporterUser.mobile})`);
+              }
+            } catch (whatsappErr) {
+              console.error("❌ Failed to send WhatsApp free conference missed notification:", whatsappErr.message);
+            }
+
+            return res.status(403).json({
+              success: false,
+              message: "You missed this conference session: You did not submit proof within the 72-hour limit after the conference date and time."
+            });
+          }
+        }
+      }
     }
 
     // Check if proof already submitted and not rejected

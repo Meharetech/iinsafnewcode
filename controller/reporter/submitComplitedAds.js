@@ -95,6 +95,18 @@ const submitComplitedAds = async (req, res) => {
           }
         );
 
+        // 📱 Send WhatsApp notification for Ads Expired [61ads_expired]
+        if (req.user && req.user.mobile) {
+          try {
+            const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+            const Templates = require("../../utils/whatsappTemplates");
+            await notifyOnWhatsapp(req.user.mobile, Templates.ADS_EXPIRED, []);
+            console.log(`📱 Sent WhatsApp ad expired notification [61ads_expired] to ${req.user.name} (${req.user.mobile})`);
+          } catch (whatsappErr) {
+            console.error("❌ Failed to send WhatsApp ad expired notification:", whatsappErr.message);
+          }
+        }
+
         return res.status(403).json({
           success: false,
           message: "Ad rejected: You did not complete the task within the 3-day time limit."

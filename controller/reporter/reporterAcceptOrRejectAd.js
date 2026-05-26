@@ -167,17 +167,38 @@ const acceptAd = async (req, res) => {
     console.log("🔍 Accept Ad Debug - Updated acceptReporterCount:", ad.acceptReporterCount);
 
     // ✅ If ad is now full, update status to running
+    let campaignStartedRunning = false;
     if (
       ad.acceptReporterCount === ad.requiredReporter &&
       ad.status === "approved"
     ) {
       ad.status = "running";
+      campaignStartedRunning = true;
       console.log("🔍 Accept Ad Debug - Ad status changed to running");
     }
 
     await ad.save({ session });
     await session.commitTransaction();
     console.log("🔍 Accept Ad Debug - Ad saved successfully");
+
+    // 📱 If the campaign has started running, send WhatsApp notification to the Advertiser
+    if (campaignStartedRunning) {
+      try {
+        const advertiser = await User.findById(ad.owner);
+        if (advertiser && advertiser.mobile) {
+          const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+          const Templates = require("../../utils/whatsappTemplates");
+          await notifyOnWhatsapp(
+            String(advertiser.mobile),
+            Templates.CAMPAIGN_LIVE,
+            []
+          );
+          console.log(`📱 Sent WhatsApp campaign live notification [59campaign_live] to advertiser ${advertiser.name} (${advertiser.mobile})`);
+        }
+      } catch (advertiserErr) {
+        console.error("❌ Failed to send WhatsApp campaign live notification to advertiser:", advertiserErr.message);
+      }
+    }
 
     // 📱 Send WhatsApp notification to reporter/influencer
     if (user.mobile) {

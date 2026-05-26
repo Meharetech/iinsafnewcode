@@ -135,15 +135,61 @@ const uploadFreeAdProof = async (req, res) => {
     }
 
     // ✅ Check if reporter has accepted the ad
-    const reporterEntry = freeAd.acceptedReporters.find(
+    const reporterEntryIndex = freeAd.acceptedReporters.findIndex(
       (r) => r.reporterId.toString() === reporterId.toString()
     );
+    const reporterEntry = freeAd.acceptedReporters[reporterEntryIndex];
 
     if (!reporterEntry || reporterEntry.postStatus !== "accepted") {
       await session.abortTransaction();
       return res.status(403).json({
         message: "You are not authorized to submit proof for this ad",
       });
+    }
+
+    // ✅ Check 3-day expiry from acceptedAt (72 hours limit for completion)
+    if (reporterEntry.acceptedAt) {
+      const acceptedAt = new Date(reporterEntry.acceptedAt);
+      const now = new Date();
+      const diffInMs = now - acceptedAt;
+      const threeDaysInMs = 3 * 24 * 60 * 60 * 1000; // 3 days (72 hours)
+
+      if (diffInMs > threeDaysInMs) {
+        console.log("❌ Reward Task expired: User exceeded 3 days limit");
+
+        // Update reporter's status in the free ad to rejected
+        freeAd.acceptedReporters[reporterEntryIndex].postStatus = "rejected";
+        freeAd.acceptedReporters[reporterEntryIndex].rejectNote = "Reward task rejected: Task not completed within 3 days limit.";
+        freeAd.acceptedReporters[reporterEntryIndex].rejectedAt = now;
+        await freeAd.save({ session });
+
+        // Update FreeAdProof status to rejected if it exists
+        const existingProof = await FreeAdProof.findOne({ adId, reporterId }).session(session);
+        if (existingProof) {
+          existingProof.status = "rejected";
+          existingProof.adminRejectNote = "Reward task rejected: Task not completed within 3 days limit.";
+          await existingProof.save({ session });
+        }
+
+        await session.commitTransaction();
+
+        // 📱 Send WhatsApp notification for Reward Task Expired [62reward_expired]
+        if (req.user && req.user.mobile) {
+          try {
+            const notifyOnWhatsapp = require("../../../utils/notifyOnWhatsapp");
+            const Templates = require("../../../utils/whatsappTemplates");
+            await notifyOnWhatsapp(req.user.mobile, Templates.REWARD_EXPIRED, []);
+            console.log(`📱 Sent WhatsApp reward task expired notification [62reward_expired] to ${req.user.name} (${req.user.mobile})`);
+          } catch (whatsappErr) {
+            console.error("❌ Failed to send WhatsApp reward task expired notification:", whatsappErr.message);
+          }
+        }
+
+        return res.status(403).json({
+          success: false,
+          message: "Reward task rejected: You did not complete the task within the 3-day time limit."
+        });
+      }
     }
 
     // ✅ Check if proof already submitted

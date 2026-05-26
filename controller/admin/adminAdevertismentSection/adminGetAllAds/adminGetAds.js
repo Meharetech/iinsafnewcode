@@ -718,6 +718,14 @@ const rejectedAds = async (req, res) => {
         } catch (whatsappErr) {
           console.error("❌ Failed to send WhatsApp campaign rejected notification:", whatsappErr.message);
         }
+
+        // 📱 Send WhatsApp campaign refund success notification [67campaign_refund_success]
+        try {
+          await notifyOnWhatsapp(String(advertiser.mobile), Templates.CAMPAIGN_REFUND_SUCCESS, [String(refundAmount)]);
+          console.log(`📱 Sent WhatsApp campaign refund success notification [67campaign_refund_success] to ${advertiser.name} (${advertiser.mobile}) for ₹${refundAmount}`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp campaign refund success notification:", whatsappErr.message);
+        }
       }
     }
 

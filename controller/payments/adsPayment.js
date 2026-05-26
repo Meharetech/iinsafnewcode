@@ -94,6 +94,19 @@ const successOrNot = async (req, res) => {
       });
 
       await newHistory.save();
+
+      // 📱 Send WhatsApp campaign payment success notification [66campaign_payment_success]
+      const user = await User.findById(userId);
+      if (user && user.mobile) {
+        try {
+          const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+          const Templates = require("../../utils/whatsappTemplates");
+          await notifyOnWhatsapp(user.mobile, Templates.CAMPAIGN_PAYMENT_SUCCESS, [String(totalAmount)]);
+          console.log(`📱 Sent WhatsApp campaign payment success notification [66campaign_payment_success] to ${user.name} (${user.mobile}) for ₹${totalAmount}`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp campaign payment success notification:", whatsappErr.message);
+        }
+      }
     }
 
     res.status(200).json({
@@ -214,6 +227,19 @@ const payFromWallet = async (req, res) => {
         );
         await wallet.save();
         throw historyErr;
+      }
+    }
+
+    // 📱 Send WhatsApp campaign payment success notification [66campaign_payment_success]
+    const user = await User.findById(userId);
+    if (user && user.mobile) {
+      try {
+        const notifyOnWhatsapp = require("../../utils/notifyOnWhatsapp");
+        const Templates = require("../../utils/whatsappTemplates");
+        await notifyOnWhatsapp(user.mobile, Templates.CAMPAIGN_PAYMENT_SUCCESS, [String(amount)]);
+        console.log(`📱 Sent WhatsApp campaign payment success notification [66campaign_payment_success] to ${user.name} (${user.mobile}) for ₹${amount}`);
+      } catch (whatsappErr) {
+        console.error("❌ Failed to send WhatsApp campaign payment success notification:", whatsappErr.message);
       }
     }
 

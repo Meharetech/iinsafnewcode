@@ -27,17 +27,38 @@ const reporterWithdrawal = async (req, res) => {
     const adPricing = await AdPricing.findOne();
     const minWithdrawAmount = adPricing?.minimumWithdrawAmountForReporter || 0; // if not set → default 0
 
+    // ✅ 2. Check wallet balance - Updated to work for both Reporter and Influencer
+    const wallet = await Wallet.findOne({ userId: userId, userType: userType });
+    if (!wallet) {
+      return res.status(404).json({ status: "wallet_not_found", message: "Wallet not found" });
+    }
+
+    // Check if wallet balance is below the minimum required withdrawal amount
+    if (wallet.balance < minWithdrawAmount) {
+      if (req.user && req.user.mobile) {
+        try {
+          await notifyOnWhatsapp(
+            String(req.user.mobile),
+            Templates.WALLET_MIN_BALANCE,
+            [String(wallet.balance)]
+          );
+          console.log(`📱 Sent WhatsApp minimum wallet balance notification [58wallet_min_balance] to ${req.user.name} (${req.user.mobile}) with balance ₹${wallet.balance}`);
+        } catch (whatsappErr) {
+          console.error("❌ Failed to send WhatsApp minimum wallet balance notification:", whatsappErr.message);
+        }
+      }
+
+      return res.status(400).json({
+        status: "below_minimum_balance",
+        message: `You need a minimum wallet balance of ₹${minWithdrawAmount} to request withdrawal. Your current balance is ₹${wallet.balance}.`
+      });
+    }
+
     if (amount < minWithdrawAmount) {
       return res.status(400).json({
         status: "below_minimum",
         message: `Minimum withdrawal amount is ${minWithdrawAmount}`
       });
-    }
-
-    // ✅ 2. Check wallet balance - Updated to work for both Reporter and Influencer
-    const wallet = await Wallet.findOne({ userId: userId, userType: userType });
-    if (!wallet) {
-      return res.status(404).json({ status: "wallet_not_found", message: "Wallet not found" });
     }
 
     if (wallet.balance < amount) {
