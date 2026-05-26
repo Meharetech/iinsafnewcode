@@ -113,38 +113,44 @@ const submitComplitedAds = async (req, res) => {
         });
       }
     }
-    console.log("📊 Fetching current views for platform:", platform);
     let currentViews = null;
-    try {
-      if (platform.toLowerCase() === "youtube") {
-        console.log("📺 Fetching YouTube views for:", videoUrl);
-        currentViews = await getYouTubeViewCount(videoUrl, process.env.YOUTUBE_API_KEY);
-        console.log("📺 YouTube views result:", currentViews);
-      } else if (platform.toLowerCase() === "facebook") {
-        console.log("📘 Fetching Facebook views for:", videoUrl);
-        // Pass returnNumeric=true to get numeric value directly
-        currentViews = await getFacebookViewCount(videoUrl, 0, true);
-        console.log("📘 Facebook views result:", currentViews);
-      } else {
-        console.error("❌ Unsupported platform:", platform);
-        return res.status(400).json({ message: "Unsupported platform" });
+    const isInstagram = platform?.toLowerCase() === "instagram";
+
+    if (!isInstagram) {
+      console.log("📊 Fetching current views for platform:", platform);
+      try {
+        if (platform.toLowerCase() === "youtube") {
+          console.log("📺 Fetching YouTube views for:", videoUrl);
+          currentViews = await getYouTubeViewCount(videoUrl, process.env.YOUTUBE_API_KEY);
+          console.log("📺 YouTube views result:", currentViews);
+        } else if (platform.toLowerCase() === "facebook") {
+          console.log("📘 Fetching Facebook views for:", videoUrl);
+          // Pass returnNumeric=true to get numeric value directly
+          currentViews = await getFacebookViewCount(videoUrl, 0, true);
+          console.log("📘 Facebook views result:", currentViews);
+        } else {
+          console.error("❌ Unsupported platform:", platform);
+          return res.status(400).json({ message: "Unsupported platform" });
+        }
+      } catch (viewError) {
+        console.error("❌ Error fetching views:", viewError);
+        return res.status(500).json({ message: "Failed to fetch current view count: " + viewError.message });
       }
-    } catch (viewError) {
-      console.error("❌ Error fetching views:", viewError);
-      return res.status(500).json({ message: "Failed to fetch current view count: " + viewError.message });
-    }
 
-    if (!currentViews || isNaN(currentViews)) {
-      console.error("❌ Invalid view count:", currentViews);
-      return res.status(500).json({ message: "Failed to fetch current view count" });
-    }
+      if (!currentViews || isNaN(currentViews)) {
+        console.error("❌ Invalid view count:", currentViews);
+        return res.status(500).json({ message: "Failed to fetch current view count" });
+      }
 
-    // ✅ 3. Compare views with base view
-    if (currentViews < baseView) {
-      return res.status(200).json({
-        success: false,
-        message: `Current views (${currentViews}) are less than required base view (${baseView}). Task not yet completed.`,
-      });
+      // ✅ 3. Compare views with base view
+      if (currentViews < baseView) {
+        return res.status(200).json({
+          success: false,
+          message: `Current views (${currentViews}) are less than required base view (${baseView}). Task not yet completed.`,
+        });
+      }
+    } else {
+      console.log("📸 Instagram platform detected. Bypassing view validation.");
     }
 
     // ✅ 4. Update proof with completion screenshot but keep status as "submitted" for admin review

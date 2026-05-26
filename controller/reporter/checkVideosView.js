@@ -21,8 +21,12 @@ const checkVideosView = async (req, res) => {
         views = await getFacebookViewCount(videoUrl, 0, true);
         break;
 
+      case 'instagram':
+        views = 0;
+        break;
+
       default:
-        return res.status(400).json({ message: "Unsupported platform. Supported: youtube, facebook" });
+        return res.status(400).json({ message: "Unsupported platform. Supported: youtube, facebook, instagram" });
     }
 
     if (views === null) {

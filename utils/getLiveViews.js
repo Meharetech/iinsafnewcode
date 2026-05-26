@@ -21,6 +21,9 @@ const getLiveViews = async (platform, videoUrl, profile = 0) => {
         // Facebook API: pass returnNumeric=true to get numeric value
         return await getFacebookViewCount(videoUrl, profile, true);
 
+      case 'instagram':
+        return 0;
+
       default:
         return null;
     }
